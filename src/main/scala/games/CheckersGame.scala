@@ -1,163 +1,97 @@
 package games
+
 import games.Players.{Player1, Player2}
-import scala.math.sqrt
-import scala.math.pow
 
-class CheckersGame(var currentPlayer: Player=Players.Player1) extends State {
-  private def oppositePlayer: Player = currentPlayer match
-    case Player1 => Player2
-    case _ => Player1
-  private def fill(even: Boolean, player: Player): List[Player] = {
-    (0 to 7).map {
-        case i if (i % 2 == 0) == even => player
-        case _ => Players.None
+/** English-style checkers: compulsory captures, chosen multi-jumps, crown ends the turn. */
+class CheckersGame(var currentPlayer: Player = Player1) extends State {
+  var board: List[List[Player]] = (0 until 8).map { row =>
+    (0 until 8).map { col =>
+      if ((row + col) % 2 != 0) Players.None
+      else if (row < 3) Player1
+      else if (row > 4) Player2
+      else Players.None
     }.toList
-  }
-  var board: List[List[Player]] = (0 to 7).map {
-    case x if List(0, 1, 2).contains(x) => {
-      fill(x % 2 == 0, Players.Player1)
-    }
-    case y if List(5, 6, 7).contains(y) => {
-      fill(y % 2 == 0, Players.Player2)
-    }
-    case _ => {
-      fill(true, Players.None)
-    }
   }.toList
+  // Promotion belongs to a square in this position, never to the global player singleton.
+  var kings: Set[(Int, Int)] = Set.empty
+  private var continuingFrom: Option[(Int, Int)] = None
 
-  def getPiece(currX: Int, currY: Int): Player = {
-    board(currX)(currY)
-  }
-  def inBounds(pos: Int): Boolean = {
-    pos >= 0 && pos <= 7
-  }
+  private def oppositePlayer: Player = if (currentPlayer == Player1) Player2 else Player1
+  def getPiece(x: Int, y: Int): Player = board(x)(y)
+  def inBounds(pos: Int): Boolean = pos >= 0 && pos < 8
 
-  def checkJump(checkersMove: Move): Option[Move] = {
-    val newX = checkersMove.currX + (checkersMove.x - checkersMove.currX)*2
-    val newY = checkersMove.currY + (checkersMove.y - checkersMove.currY)*2
-    if (!inBounds(newX) || !inBounds(newY)) {
-      None
-    } else {
-      if (getPiece(newX, newY) == Players.None) {
-        Some(new Move(newX, newY, checkersMove.currX, checkersMove.currY))
-      } else {
-        None
+  private def candidateMoves(x: Int, y: Int, capturesOnly: Boolean): List[Move] = {
+    val directions = if (kings((x, y))) List(-1, 1)
+                     else if (currentPlayer == Player1) List(1) else List(-1)
+    directions.flatMap { dx =>
+      List(-1, 1).flatMap { dy =>
+        val nx = x + dx
+        val ny = y + dy
+        if (!inBounds(nx) || !inBounds(ny)) None
+        else if (getPiece(nx, ny) == Players.None && !capturesOnly)
+          Some(new Move(nx, ny, x, y))
+        else if (getPiece(nx, ny) == oppositePlayer &&
+                 inBounds(x + 2 * dx) && inBounds(y + 2 * dy) &&
+                 getPiece(x + 2 * dx, y + 2 * dy) == Players.None)
+          Some(new Move(x + 2 * dx, y + 2 * dy, x, y))
+        else None
       }
     }
   }
-  def getMove(currX: Int, currY: Int): List[Move] = {
-    val filteredDirs =
-      if getPiece(currX, currY).common
-      then List(-1, 1)
-        .filter(x => if (currentPlayer == Players.Player1) then x > 0 else x < 0)
-      else List(-1, 1)
 
-    val possibleMoves = filteredDirs.flatMap(x => {
-      List(-1, 1).map(y => {
-        Move(currX + x, currY + y, currX, currY)
-      })
-    }).filter(move => (move.x >= 0) && (move.x <= 7) && (move.y <= 7) && (move.y >= 0))
+  def getMove(x: Int, y: Int): List[Move] =
+    if (getPiece(x, y) == currentPlayer) candidateMoves(x, y, false) else Nil
 
-    possibleMoves
-      .filter(move => getPiece(move.x, move.y) != currentPlayer)
-      .flatMap(x => if getPiece(x.x, x.y) == oppositePlayer then checkJump(x) else Some(x))
-  }
   override def getMoves: List[Move] = {
-    (0 to 7).flatMap(row => {
-      (0 to 7).map(col => {
-        (row, col)
-      })
-    }).filter(getPiece(_, _) == currentPlayer).flatMap(getMove).toList
+    val positions = continuingFrom.toList match {
+      case Nil => (for (x <- 0 until 8; y <- 0 until 8 if getPiece(x, y) == currentPlayer) yield (x, y)).toList
+      case xs => xs
+    }
+    val captures = positions.flatMap((x, y) => candidateMoves(x, y, true))
+    if (captures.nonEmpty) captures
+    else if (continuingFrom.nonEmpty) Nil
+    else positions.flatMap((x, y) => candidateMoves(x, y, false))
   }
 
-  def updateSpot(x: Int, y: Int, player: Player): List[List[Player]] = {
+  def updateSpot(x: Int, y: Int, player: Player): List[List[Player]] =
     board.updated(x, board(x).updated(y, player))
-  }
 
   override def makeMove(move: Move): Unit = {
-
-    if (Math.abs(move.currX - move.x) == 2) {
-      val dx = move.currX + (move.x - move.currX)/2
-      val dy = move.currY + (move.y - move.currY)/2
-      board = updateSpot(move.currX, move.currY, Players.None)
-      board = updateSpot(dx, dy, Players.None)
-      board = updateSpot(move.x, move.y, currentPlayer)
-      val mv = getMove(move.x, move.y)
-      val newMoves = mv.filter(move => Math.abs(move.currX - move.x) == 2)
-      if (newMoves.nonEmpty) {
-        makeMove(newMoves.head)
-      } else {
-        if (move.x == 7 && currentPlayer == Player1) {
-          val piece = getPiece(move.x, move.y)
-          piece.common = false
-          board = board.updated(move.x, board(move.x).updated(move.y, piece))
-        } else if (move.x == 0 && currentPlayer == Player2) {
-          val piece = getPiece(move.x, move.y)
-          piece.common = false
-          board = board.updated(move.x, board(move.x).updated(move.y, piece))
-        }
-        currentPlayer = oppositePlayer
-      }
-    } else {
-      board = updateSpot(move.currX, move.currY, Players.None)
-      board = updateSpot(move.x, move.y, currentPlayer)
-      if (move.x == 7 && currentPlayer == Player1) {
-        val piece = getPiece(move.x, move.y)
-        piece.common = false
-        board = board.updated(move.x, board(move.x).updated(move.y, piece))
-      } else if (move.x == 0 && currentPlayer == Player2) {
-        val piece = getPiece(move.x, move.y)
-        piece.common = false
-        board = board.updated(move.x, board(move.x).updated(move.y, piece))
-      }
+    require(getMoves.exists(m => m.x == move.x && m.y == move.y &&
+      m.currX == move.currX && m.currY == move.currY), "illegal checkers move")
+    val wasKing = kings((move.currX, move.currY))
+    board = updateSpot(move.currX, move.currY, Players.None)
+    kings -= ((move.currX, move.currY))
+    val captured = Math.abs(move.x - move.currX) == 2
+    if (captured) {
+      val middle = ((move.x + move.currX) / 2, (move.y + move.currY) / 2)
+      board = updateSpot(middle._1, middle._2, Players.None)
+      kings -= middle
+    }
+    board = updateSpot(move.x, move.y, currentPlayer)
+    val promoted = !wasKing && (if (currentPlayer == Player1) move.x == 7 else move.x == 0)
+    if (wasKing || promoted) kings += ((move.x, move.y))
+    if (captured && !promoted && candidateMoves(move.x, move.y, true).nonEmpty)
+      continuingFrom = Some((move.x, move.y))
+    else {
+      continuingFrom = None
       currentPlayer = oppositePlayer
     }
   }
 
+  override def hasWinner: Boolean = getMoves.isEmpty
+  override def getWinner: Player = if (hasWinner) oppositePlayer else Players.None
 
-
-
-  override def hasWinner: Boolean = {
-    // eliminate squares that are not empty and leaving squares that have pieces
-    val distinctPieces = board.flatten.filter(_ != Players.None).distinct
-    val board_copy = copy
-    if (board_copy.getMoves.isEmpty) {
-      return true
-    }
-    board_copy.currentPlayer = oppositePlayer
-    if (board_copy.getMoves.isEmpty) {
-      return true
-    }
-    distinctPieces.size == 1 || distinctPieces.isEmpty
-
+  override def copy: CheckersGame = {
+    val result = new CheckersGame(currentPlayer)
+    result.board = board
+    result.kings = kings
+    result.continuingFrom = continuingFrom
+    result
   }
 
-  override def getWinner: Player = {
-    val board_copy = copy
-    if (board_copy.getMoves.isEmpty) {
-      return board_copy.currentPlayer
-    }
-    board_copy.currentPlayer = oppositePlayer
-    if (board_copy.getMoves.isEmpty) {
-      return board_copy.currentPlayer
-    }
-    if(board.flatten.count(_ == Players.Player1) == 0) Players.Player2
-    else Players.Player1
-
-  }
-
-  def copy: State = {
-    val game = new CheckersGame(currentPlayer)
-    game.board = board
-    game
-  }
-
-  override def toString: String = board.map(row => row.map(_.toString).mkString(" ")).mkString("\n")
+  override def toString: String =
+    board.zipWithIndex.map((row, x) => row.zipWithIndex.map((p, y) =>
+      if (p == Players.None) "." else if (p == Player1) { if (kings((x,y))) "X" else "x" }
+      else { if (kings((x,y))) "O" else "o" }).mkString(" ")).mkString("\n")
 }
-
-
-
-//object checkersPlayer extends Players {
-//
-//}
-

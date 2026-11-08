@@ -6,10 +6,11 @@ class ABGame(var board: List[Player] = List(Players.Player1, Players.None, Playe
     val playerIndex = board.indexOf(currentPlayer)
     val leftIndex = if playerIndex == 0 then -1 else if board(playerIndex - 1) == Players.None then playerIndex - 1 else playerIndex - 2
     val rightIndex = if playerIndex == board.length - 1 then -1 else if board(playerIndex + 1) == Players.None then playerIndex + 1 else playerIndex + 2
-    List(new Move(leftIndex, 0), new Move(rightIndex, 0)).filter(m => m.x >= 0 && m.x < board.size)
+    List(new Move(leftIndex, 0), new Move(rightIndex, 0)).filter(m => m.x >= 0 && m.x < board.size && board(m.x) == Players.None)
   }
 
   override def makeMove(move: Move): Unit = {
+    require(getMoves.exists(_.x == move.x), "illegal AB move")
     board = board.updated(board.indexOf(currentPlayer), Players.None)
     board = board.updated(move.x, currentPlayer)
     currentPlayer = if (currentPlayer == Players.Player1) Players.Player2 else Players.Player1

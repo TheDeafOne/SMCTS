@@ -35,17 +35,9 @@ class TicTacToeBoard(val player1Pieces: Int = 0, val player2Pieces: Int = 0, val
         val backwardDiag = (boardLength to 1 by -1).map(x => x + (boardLength - x) * boardLength).map(getBoardSpace).sum
 
         val masks = (horizontal concat vertical).toList :+ forwardDiag :+ backwardDiag
-        masks.foreach(mask => {
-            if (((player1Pieces & mask) ^ mask) == 0 || ((player2Pieces & mask) ^ mask) == 0) {
-                return Some(true)
-            }
-        })
-
-        if (player1Pieces + player2Pieces == getBoardSpace(boardSize + 1) - 1) {
-            return Option(false)
-        }
-
-        None
+        if (masks.exists(mask => (player1Pieces & mask) == mask || (player2Pieces & mask) == mask)) Some(true)
+        else if ((player1Pieces | player2Pieces) == (1 << boardSize) - 1) Some(false)
+        else None
     }
 
     /**
@@ -77,7 +69,7 @@ class TicTacToeBoard(val player1Pieces: Int = 0, val player2Pieces: Int = 0, val
     /**
      * @return All the values 1-boardSize which are legal moves
      */
-    def getValidMoves: List[Int] = (for i <- 1 to boardSize if isValidMove(i) yield i).toList
+    def getValidMoves: List[Int] = if (hasWinner.isDefined) Nil else (for i <- 1 to boardSize if isValidMove(i) yield i).toList
 
     /**
      * @param space The move on which the player should play on
