@@ -2,7 +2,7 @@ import algorithms.{MonteCarloTreeSearch, Node}
 import games.{ABGame, CheckersGame, TicTacToeGameState}
 
 @main def tester(): Unit = {
-  val root = new Node(new CheckersGame(), null, null)
+  val root = new Node(new TicTacToeGameState(), null, null)
   val MCTS = new MonteCarloTreeSearch(root, 100)
   var current = root
   while (!current.state.hasWinner) {

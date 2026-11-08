@@ -50,49 +50,22 @@ def timeRuns = {
 
 
 def runGame(player1Algo: TwoPlayerGame => Int, player2Algo: TwoPlayerGame => Int, verbose: Boolean = false, startingBoard: TwoPlayerGame): Int = {
-
-  if (verbose) {
-    println(startingBoard.getGameIntroText)
-  }
-
-  def gameLoop(gameBoard: TwoPlayerGame): Int = {
-    if (gameBoard.hasWinner.isDefined) {
-        if (gameBoard.hasWinner.get) {
-          println(s"Game Over! Player ${gameBoard.getWinner}")
-        }
-        else {
-          println("Game Over. Draw!")
-        }
-        println("Final game state: ")
-        println(gameBoard.toString)
-      return if(gameBoard.hasWinner.get) then gameBoard.getWinner else -1
-    }
-    else{
-      //            if (verbose) {
-      //                println(s"Current Board: Player ${if gameBoard.getNextPlayer then 1 else 2}")
-      //                println(gameBoard.toString)
-      //            }
-      val moveToMake = if gameBoard.getNextPlayer then player1Algo(gameBoard) else player2Algo(gameBoard)
-
-      // -1 is a resignation
-      if (moveToMake == -1) {
-        if (verbose) {
-          println("Resignation...")
-          println("Final Board State: ")
-          println(gameBoard.toString)
-          println("Quiting...")
-        }
-        return -2
+  if (verbose) println(startingBoard.getGameIntroText)
+  @scala.annotation.tailrec
+  def gameLoop(board: TwoPlayerGame): Int = {
+    if (board.hasWinner.isDefined) {
+      val result = if (board.hasWinner.get) board.getWinner else -1
+      if (verbose) {
+        println(if (result == -1) "Game Over. Draw!" else s"Game Over! Player $result")
+        println(board)
       }
+      result
+    } else {
+      val move = if (board.getNextPlayer) player1Algo(board) else player2Algo(board)
+      if (move == -1) -2
       else {
-        try {
-          val newBoard = gameBoard.makeMove(moveToMake)
-          gameLoop(newBoard)
-        }
-        catch {
-          case e => println(e.getMessage)
-            gameLoop(gameBoard)
-        }
+        require(board.getValidMoves.contains(move), s"algorithm returned illegal move $move")
+        gameLoop(board.makeMove(move))
       }
     }
   }

@@ -1,5 +1,8 @@
-# Project exclude paths
-/project/target/
-/target/
-/.idea/
-.bsp/sbt.json
+target/
+project/target/
+project/project/
+.bsp/
+.metals/
+.idea/
+*.iml
+.DS_Store
